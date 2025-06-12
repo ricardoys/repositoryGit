@@ -1,3 +1,8 @@
 from django.contrib import admin
 
-# Register your models here.
+from .models import Repositorio, GitUser, Issue, Commit
+
+admin.site.register(Repositorio)
+admin.site.register(GitUser)
+admin.site.register(Issue)
+admin.site.register(Commit)
