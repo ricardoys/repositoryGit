@@ -1,0 +1,7 @@
+Django~=5.0
+psycopg2-binary~=2.9
+redis~=5.0
+celery~=5.3
+django-celery-beat~=2.5
+requests~=2.32
+python-dotenv~=1.0
