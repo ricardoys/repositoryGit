@@ -27,8 +27,8 @@ class Repositorio(models.Model):
                                    help_text="ID único do repositório na plataforma externa (ex: GitHub ID). Útil para APIs.")
     clone_url_http = models.URLField(max_length=512, blank=True, null=True,
                                      help_text="URL para clonar o repositório via HTTPS")
-    clone_url_ssh = models.URLField(max_length=512, blank=True, null=True,
-                                    help_text="URL para clonar o repositório via SSH")
+    clone_url_ssh = models.CharField(max_length=512, blank=True, null=True,
+                                     help_text="URL para clonar o repositório via SSH (formato SSH).")
     web_url = models.URLField(max_length=512, blank=True, null=True,
                               help_text="URL do repositório na interface web (ex: https://github.com/owner/name)")
 
