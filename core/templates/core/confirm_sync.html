@@ -1,0 +1,17 @@
+{% extends 'core/base.html' %}
+
+{% block title %}
+    Confirmar Sincronização
+{% endblock title %}
+
+{% block content %}
+    <h1>Confirmar Sincronização</h1>
+    <p>Você tem certeza que deseja sincronizar o repositório <strong>{{ repo.full_name }}</strong>?</p>
+    
+    <form class="mt-4 mb-3" action="{% url 'sync_repository' repo.pk %}" method="post">
+        {% csrf_token %}
+        <button class="btn btn-primary" type="submit">Sim, Sincronizar Agora</button>
+    </form>
+    <a href="{% url 'repository_detail' repo.pk %}">Não, Voltar</a>
+
+{% endblock content %}

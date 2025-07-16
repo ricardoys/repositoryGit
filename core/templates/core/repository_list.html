@@ -1,0 +1,54 @@
+{% extends 'core/base.html' %}
+
+{% block title %}
+    Repositórios Monitorados
+{% endblock %}
+
+{% block content %}
+    <h1>Repositórios Monitorados</h1>
+    {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+                <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    <table class="table table-striped mt-5">
+        <thead>
+            <tr>
+                <th>Nome</th>
+                <th>Proprietário</th>
+                <th>Plataforma</th>
+                <th>Ativo</th>
+                <th>Última Sinc. Issues</th>
+                <th>Última Sinc. Commits</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if repos %}
+                {% for repo in repos %}
+                    <tr>
+                        <td><a href="{% url 'repository_detail' repo.pk %}">{{ repo.full_name }}</a></td>
+                        <td>{{ repo.owner }}</td>
+                        <td>{{ repo.platform }}</td>
+                        <td>{{ repo.active|yesno:"Sim,Não" }}</td>
+                        <td>{{ repo.last_sync_issues_at|default:"Nunca" }}</td>
+                        <td>{{ repo.last_sync_commits_at|default:"Nunca" }}</td>
+                        <td>
+                            <a href="{% url 'sync_repository' repo.pk %}">Sinc. Repositório</a>
+                            <a href="{% url 'sync_issues' repo.pk %}">Sinc. Issues</a>
+                            <a href="{% url 'sync_commits' repo.pk %}">Sinc. Commits</a>
+                        </td>
+                    </tr>
+                {% endfor %}
+            {% else %}  
+                <tr>
+                    <td colspan="7">Nenhum repositório encontrado. Adicione um para começar!</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+{% endblock content %}

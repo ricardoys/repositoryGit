@@ -1,0 +1,51 @@
+{% extends 'core/base.html' %}
+
+{% block title %}
+    Detalhes do Repositório
+{% endblock %}
+
+{% block content %}
+    {% if repo is undefined %}
+        <h1>Repositório não encontrado.</h1>
+        <p>Redirecionando para a lista de repositórios...</p>
+        <script>
+            window.location.href = "{% url 'repository_list' %}";
+        </script>
+    {% else %}
+        <h1>Detalhes do Repositório: {{ repo.full_name }}</h1>
+    {% endif %}
+
+    {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+                <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    <div class="mt-4 mb-3">
+        <p><strong>ID:</strong> {{ repo.id }}</p>
+        <p><strong>Proprietário:</strong> {{ repo.owner }}</p>
+        <p><strong>Nome:</strong> {{ repo.name }}</p>
+        <p><strong>Plataforma:</strong> {{ repo.platform }}</p>
+        <p><strong>Descrição:</strong> {{ repo.description|default:"N/A" }}</p>
+        <p><strong>Linguagem Principal:</strong> {{ repo.language|default:"N/A" }}</p>
+        <p><strong>Estrelas:</strong> {{ repo.stars_count }}</p>
+        <p><strong>Forks:</strong> {{ repo.forks_count }}</p>
+        <p><strong>Issues Abertas (Git):</strong> {{ repo.open_issues_count }}</p>
+        <p><strong>Branch Padrão:</strong> {{ repo.default_branch }}</p>
+        <p><strong>URL Web:</strong> <a href="{{ repo.web_url }}" target="_blank">{{ repo.web_url }}</a></p>
+        <p><strong>Clone HTTP:</strong> {{ repo.clone_url_http }}</p>
+        <p><strong>Clone SSH:</strong> {{ repo.clone_url_ssh }}</p>
+        <p><strong>Ativo (monitoramento):</strong> {{ repo.active|yesno:"Sim,Não" }}</p>
+        <p><strong>Última Sinc. Issues:</strong> {{ repo.last_sync_issues_at|default:"Nunca" }}</p>
+        <p><strong>Última Sinc. Commits:</strong> {{ repo.last_sync_commits_at|default:"Nunca" }}</p>
+    </div>
+    <h2>Ações:</h2>
+    <form action="{% url 'sync_repository' repo.pk %}" method="post">
+        {% csrf_token %}
+        <button class="btn btn-primary" type="submit">Sincronizar Metadados Agora</button>
+    </form>
+    <br>
+    <a href="{% url 'repository_list' %}">Voltar para a lista de repositórios</a>
+{% endblock content %}

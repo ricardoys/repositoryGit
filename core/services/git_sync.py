@@ -1,7 +1,9 @@
-from your_app_name.services import github_api # Importa as funções da API
-from your_app_name.models import Repositorio, Issue, Commit, GitUser
+from core.services import github_api # Importa as funções da API
+from core.models import Repositorio, Issue, Commit, GitUser
 from django.db import transaction
 from datetime import datetime
+from django.utils import timezone
+import requests
 import re # Para parsing de mensagens de commit
 
 # Regex para encontrar referências a issues na mensagem de commit
@@ -12,7 +14,7 @@ def _get_or_create_git_user(user_data):
     if not user_data or 'id' not in user_data:
         return None
     user, created = GitUser.objects.get_or_create(
-        external_id=str(user_data['id']), # IDs podem vir como int, mas CharField é mais flexível
+        external_id=str(user_data['id']), # IDs podem vir como int
         defaults={
             'username': user_data.get('login'),
             'avatar_url': user_data.get('avatar_url'),
@@ -20,7 +22,7 @@ def _get_or_create_git_user(user_data):
             'user_type': user_data.get('type'),
         }
     )
-    # Se não foi criado, mas o username ou avatar_url mudaram, você pode atualizar aqui
+    # Se não foi criado, mas o username ou avatar_url mudaram, atualizar aqui
     if not created and (user.username != user_data.get('login') or user.avatar_url != user_data.get('avatar_url')):
         user.username = user_data.get('login')
         user.avatar_url = user_data.get('avatar_url')
@@ -45,12 +47,11 @@ def sync_repository_metadata(repo_obj: Repositorio):
         repo_obj.web_url = repo_data.get('html_url')
         repo_obj.clone_url_http = repo_data.get('clone_url')
         repo_obj.clone_url_ssh = repo_data.get('ssh_url')
-        repo_obj.external_id = str(repo_data.get('id')) # Guardar o ID externo
+        repo_obj.external_id = str(repo_data.get('id'))
         repo_obj.save()
         print(f"Metadados do repositório {repo_obj.full_name} sincronizados.")
     except Exception as e:
         print(f"Erro ao sincronizar metadados para {repo_obj.full_name}: {e}")
-        # Logar erro, enviar para Sentry, etc.
 
 
 def sync_repository_issues(repo_obj: Repositorio, state='all', since_datetime=None):
@@ -81,9 +82,9 @@ def sync_repository_issues(repo_obj: Repositorio, state='all', since_datetime=No
 
             with transaction.atomic(): # Garante que todas as operações no DB sejam atômicas
                 for issue_data in issues_data:
-                    # Algumas APIs retornam PRs como Issues. Você pode filtrar aqui.
+                    # Algumas APIs retornam PRs como Issues.
                     if 'pull_request' in issue_data:
-                        continue # Pule pull requests se você tiver um modelo separado para eles
+                        continue # Pule pull requests se tiver um modelo separado para eles
 
                     # Evita processar a mesma issue se por algum motivo vier duplicada na paginação
                     if issue_data['id'] in issues_ids_in_batch:
@@ -171,13 +172,14 @@ def sync_repository_commits(repo_obj: Repositorio, since_datetime=None, until_da
 
     while has_more:
         try:
+            # Converte datetime para string ISO 8601 exigida pela API
             since_str = since_datetime.isoformat() + 'Z' if since_datetime else None
             until_str = until_datetime.isoformat() + 'Z' if until_datetime else None
 
             commits_data = github_api.fetch_repo_commits(
                 repo_obj.owner, repo_obj.name,
-                since=since_str,
-                until=until_str,
+                since=since_str, # Passa o filtro 'since'
+                until=until_str, # Passa o filtro 'until'
                 page=page
             )
 
@@ -217,14 +219,16 @@ def sync_repository_commits(repo_obj: Repositorio, since_datetime=None, until_da
                     )
 
                     # Lógica para vincular issues ao commit (parsing da mensagem)
-                    linked_issue_numbers = ISSUE_REF_PATTERN.findall(commit.message)
+                    linked_issue_numbers = []
+                    if 'commit' in commit_data and 'message' in commit_data['commit']:
+                        linked_issue_numbers = [int(num) for num in ISSUE_REF_PATTERN.findall(commit_data['commit']['message'])]
+                    
                     if linked_issue_numbers:
-                        # Buscar issues do mesmo repositório com esses números
                         issues_to_link = Issue.objects.filter(
                             repository=repo_obj,
                             number__in=linked_issue_numbers
                         )
-                        commit.issues.set(issues_to_link) # Seta o M2M para as issues encontradas
+                        commit.issues.set(issues_to_link)
 
                     if created:
                         processed_count += 1
@@ -250,3 +254,97 @@ def sync_repository_commits(repo_obj: Repositorio, since_datetime=None, until_da
     repo_obj.last_sync_commits_at = timezone.now()
     repo_obj.save(update_fields=['last_sync_commits_at'])
     print(f"Sincronização de commits para {repo_obj.full_name} concluída. {processed_count} novas/atualizadas commits.")
+
+# def sync_repository_commits(repo_obj: Repositorio, since_datetime=None, until_datetime=None):
+#     """
+#     Baixa e grava commits de um repositório, com suporte a filtro e paginação.
+#     `since_datetime`: datetime object para buscar commits feitos a partir desta data.
+#     `until_datetime`: datetime object para buscar commits feitos até esta data.
+#     """
+#     print(f"Iniciando sincronização de commits para {repo_obj.full_name}...")
+#     page = 1
+#     has_more = True
+#     processed_count = 0
+#     commits_shas_in_batch = set() # Para evitar duplicatas na mesma execução
+
+#     while has_more:
+#         try:
+#             since_str = since_datetime.isoformat() + 'Z' if since_datetime else None
+#             until_str = until_datetime.isoformat() + 'Z' if until_datetime else None
+
+#             commits_data = github_api.fetch_repo_commits(
+#                 repo_obj.owner, repo_obj.name,
+#                 since=since_str,
+#                 until=until_str,
+#                 page=page
+#             )
+
+#             if not commits_data:
+#                 has_more = False
+#                 break
+
+#             with transaction.atomic():
+#                 for commit_data in commits_data:
+#                     commit_sha = commit_data['sha']
+#                     if commit_sha in commits_shas_in_batch:
+#                         continue
+#                     commits_shas_in_batch.add(commit_sha)
+
+#                     author_obj = _get_or_create_git_user(commit_data['author'])
+#                     committer_obj = _get_or_create_git_user(commit_data['committer'])
+
+#                     commit, created = Commit.objects.update_or_create(
+#                         repository=repo_obj,
+#                         sha=commit_sha,
+#                         defaults={
+#                             'short_sha': commit_sha[:7],
+#                             'message': commit_data['commit']['message'],
+#                             'author': author_obj,
+#                             'committer': committer_obj,
+#                             'author_date_git': datetime.fromisoformat(commit_data['commit']['author']['date'].replace('Z', '+00:00')),
+#                             'committer_date_git': datetime.fromisoformat(commit_data['commit']['committer']['date'].replace('Z', '+00:00')),
+#                             'additions': commit_data['stats']['additions'] if 'stats' in commit_data else 0,
+#                             'deletions': commit_data['stats']['deletions'] if 'stats' in commit_data else 0,
+#                             'total_changes': commit_data['stats']['total'] if 'stats' in commit_data else 0,
+#                             'parents_shas': [p['sha'] for p in commit_data['parents']],
+#                             'verification_status': commit_data['commit']['verification']['verified'] if 'verification' in commit_data['commit'] else 'unverified',
+#                             'verification_reason': commit_data['commit']['verification']['reason'] if 'verification' in commit_data['commit'] else '',
+#                             'web_url': commit_data['html_url'],
+#                             'synced_at': timezone.now(),
+#                         }
+#                     )
+
+#                     # Lógica para vincular issues ao commit (parsing da mensagem)
+#                     linked_issue_numbers = ISSUE_REF_PATTERN.findall(commit.message)
+#                     if linked_issue_numbers:
+#                         # Buscar issues do mesmo repositório com esses números
+#                         issues_to_link = Issue.objects.filter(
+#                             repository=repo_obj,
+#                             number__in=linked_issue_numbers
+#                         )
+#                         commit.issues.set(issues_to_link) # Seta o M2M para as issues encontradas
+
+#                     if created:
+#                         processed_count += 1
+#                         # print(f"  Commit {commit.short_sha} criado.")
+#                     # else:
+#                         # print(f"  Commit {commit.short_sha} atualizado.")
+
+#             if len(commits_data) < github_api.PER_PAGE_DEFAULT:
+#                 has_more = False
+
+#             page += 1
+
+#         except github_api.GitHubAPIError as e:
+#             print(f"Erro da API do GitHub ao sincronizar commits para {repo_obj.full_name} (página {page}): {e}")
+#             has_more = False
+#         except requests.exceptions.RequestException as e:
+#             print(f"Erro de conexão ao sincronizar commits para {repo_obj.full_name} (página {page}): {e}")
+#             has_more = False
+#         except Exception as e:
+#             print(f"Erro inesperado ao processar commits para {repo_obj.full_name} (página {page}): {e}")
+#             has_more = False
+
+#     repo_obj.last_sync_commits_at = timezone.now()
+#     repo_obj.save(update_fields=['last_sync_commits_at'])
+#     print(f"Sincronização de commits para {repo_obj.full_name} concluída. {processed_count} novas/atualizadas commits.")

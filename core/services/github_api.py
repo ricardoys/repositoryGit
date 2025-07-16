@@ -5,6 +5,7 @@ import time
 # Constantes para a API do GitHub
 GITHUB_API_BASE_URL = "https://api.github.com"
 GITHUB_API_TOKEN = os.getenv("GITHUB_TOKEN") # Obtenha do .env
+PER_PAGE_DEFAULT = 100
 
 class GitHubAPIError(Exception):
     """Exceção customizada para erros da API do GitHub."""

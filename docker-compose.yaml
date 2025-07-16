@@ -39,7 +39,7 @@ services:
   # 4. Celery Worker
   celery_worker:
     build: .
-    command: celery -A your_project_name worker -l info # Substitua 'your_project_name' pelo nome do seu projeto Django
+    command: celery -A repositoriogit worker -l info # Substitua 'your_project_name' pelo nome do seu projeto Django
     volumes:
       - .:/app
     env_file:
@@ -52,7 +52,7 @@ services:
   # 5. Celery Beat (Agendador de Tarefas) - Opcional, se precisar de tarefas agendadas
   celery_beat:
     build: .
-    command: celery -A your_project_name beat -l info --scheduler django_celery_beat.schedulers.DatabaseScheduler
+    command: celery -A repositoriogit beat -l info --scheduler django_celery_beat.schedulers.DatabaseScheduler
     volumes:
       - .:/app
     env_file:
